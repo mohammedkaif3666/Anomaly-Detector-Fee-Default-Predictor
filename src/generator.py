@@ -1,80 +1,165 @@
-import pandas as pd
+"""
+generator.py
+============
+Synthetic data generator for the School Anomaly Detector & Fee Default Predictor.
+
+Attendance Data
+---------------
+- 500 students  x  200 school days (Mon-Fri cycling)
+- 430 normal students  (86%) : attendance_rate ~ Uniform(0.80, 0.97)   → is_anomalous = 0
+-  70 anomalous students (14%): start normal, then SUDDEN DROP to       → is_anomalous = 1
+   Uniform(0.20, 0.40) at a random breakpoint between day 30 and 150.
+
+Fee Data
+--------
+- 500 students  x  3 terms
+- Overall target distribution : 80% On-time | 15% Late | 5% Default
+- Per-student features : family_income_bracket, transport_user, sibling_count
+- Income is correlated with default probability for realistic ML signal.
+"""
+
 import numpy as np
+import pandas as pd
 
-def generate_attendance(num_students=500, days=200):
+
+# --------------------------------------------------------------------------- #
+#  ATTENDANCE GENERATOR                                                         #
+# --------------------------------------------------------------------------- #
+
+def generate_attendance(num_students: int = 500,
+                        days: int = 200,
+                        seed: int = 42) -> pd.DataFrame:
     """
-    Generate attendance data for 500 students over 200 school days.
-    - 86% normal: attendance_rate between 80-97%
-    - 14% anomalous: sudden drop to 20-40% after a normal start
+    Generate raw daily attendance records.
+
+    Parameters
+    ----------
+    num_students : total students (default 500)
+    days         : total school days (default 200)
+    seed         : random seed for reproducibility
+
+    Returns
+    -------
+    pd.DataFrame with columns:
+        student_id | day | day_of_week | present | is_anomalous
     """
-    data = []
-    np.random.seed(42)
-    student_ids = [f"STU_{i:03d}" for i in range(num_students)]
+    np.random.seed(seed)
 
-    num_anomalous = int(num_students * 0.14)   # 70 students
-    anomalous_set = set(student_ids[:num_anomalous])
+    n_normal    = int(num_students * 0.86)          # 430
+    n_anomalous = num_students - n_normal           #  70
 
-    for stu_id in student_ids:
-        if stu_id not in anomalous_set:
-            # Normal: consistent high attendance throughout
-            rate = np.random.uniform(0.80, 0.97)
-            attendance = np.random.choice([1, 0], size=days, p=[rate, 1 - rate])
-            is_anomalous = 0
-        else:
-            # Anomalous: start normal (days 0-99), SUDDEN DROP (days 100-199)
-            normal_rate = np.random.uniform(0.85, 0.97)
-            drop_rate   = np.random.uniform(0.20, 0.40)
-            first_half  = np.random.choice([1, 0], size=days // 2, p=[normal_rate, 1 - normal_rate])
-            second_half = np.random.choice([1, 0], size=days // 2, p=[drop_rate,  1 - drop_rate])
-            attendance  = np.concatenate([first_half, second_half])
-            is_anomalous = 1
+    # Monte-Carlo rates for all students at once (as in the tip)
+    normal_rates    = np.random.uniform(0.80, 0.97, n_normal)
+    drop_rates      = np.random.uniform(0.20, 0.40, n_anomalous)
+    pre_drop_rates  = np.random.uniform(0.85, 0.97, n_anomalous)  # normal phase
+    drop_days       = np.random.randint(30, 151,    n_anomalous)   # random breakpoint
+
+    # Day-of-week: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri  (cycles over 200 days)
+    dow_cycle = np.array([d % 5 for d in range(days)])
+
+    records = []
+
+    # --- Normal students ---
+    for i in range(n_normal):
+        stu_id = f"STU_{i + 1:03d}"
+        rate = normal_rates[i]
+        present = np.random.binomial(1, rate, days).astype(int)
 
         for day in range(days):
-            data.append([stu_id, day, int(attendance[day]), is_anomalous])
+            records.append((stu_id, day, dow_cycle[day], present[day], 0))
 
-    return pd.DataFrame(data, columns=['student_id', 'day', 'present', 'is_anomalous'])
+    # --- Anomalous students ---
+    for j in range(n_anomalous):
+        stu_id    = f"STU_{n_normal + j + 1:03d}"
+        pre_rate  = pre_drop_rates[j]
+        post_rate = drop_rates[j]
+        dp        = drop_days[j]                        # sudden-drop breakpoint
+
+        pre_phase  = np.random.binomial(1, pre_rate,  dp).astype(int)
+        post_phase = np.random.binomial(1, post_rate, days - dp).astype(int)
+        present    = np.concatenate([pre_phase, post_phase])
+
+        for day in range(days):
+            records.append((stu_id, day, dow_cycle[day], present[day], 1))
+
+    df = pd.DataFrame(
+        records,
+        columns=["student_id", "day", "day_of_week", "present", "is_anomalous"]
+    )
+    return df
 
 
-def generate_fees(num_students=500):
+# --------------------------------------------------------------------------- #
+#  FEE GENERATOR                                                                #
+# --------------------------------------------------------------------------- #
+
+def generate_fees(num_students: int = 500,
+                  seed: int = 42) -> pd.DataFrame:
     """
-    Generate fee data for 500 students across 3 terms.
-    - 80% On-time, 15% Late, 5% Default
-    - Features: family_income_bracket, transport_user, sibling_count
-    - Label: fee_default (1 = Default, 0 = otherwise)
+    Generate fee payment records for 3 terms per student.
+
+    Income-bracket correlated default probabilities keep the overall
+    distribution close to the target (80% On-time / 15% Late / 5% Default).
+
+    Income bracket mix : 30% Low | 50% Medium | 20% High
+    Per-bracket probs  :
+        Low    → 10% Default | 22% Late | 68% On-time
+        Medium →  3% Default | 13% Late | 84% On-time
+        High   →  1% Default |  5% Late | 94% On-time
+    Weighted average   → ~5% Default | ~14% Late | ~81% On-time  ✓
+
+    Parameters
+    ----------
+    num_students : total students (default 500)
+    seed         : random seed
+
+    Returns
+    -------
+    pd.DataFrame with columns:
+        student_id | term | family_income_bracket | transport_user |
+        sibling_count | fee_status | fee_default
     """
-    np.random.seed(42)
-    student_ids = [f"STU_{i:03d}" for i in range(num_students)]
-    data = []
+    np.random.seed(seed)
 
-    for stu_id in student_ids:
-        # Student-level features (same across terms)
-        family_income_bracket = np.random.choice(['Low', 'Medium', 'High'], p=[0.30, 0.50, 0.20])
-        transport_user        = int(np.random.choice([0, 1]))
-        sibling_count         = int(np.random.randint(0, 5))
+    # Per-bracket payment probability vectors [On-time, Late, Default]
+    bracket_probs = {
+        "Low":    [0.68, 0.22, 0.10],
+        "Medium": [0.84, 0.13, 0.03],
+        "High":   [0.94, 0.05, 0.01],
+    }
+    statuses = ["On-time", "Late", "Default"]
 
-        for term in range(1, 4):   # Term 1, 2, 3
-            status = np.random.choice(
-                ['On-time', 'Late', 'Default'],
-                p=[0.80, 0.15, 0.05]
-            )
-            fee_default = 1 if status == 'Default' else 0
+    records = []
 
-            data.append([
-                stu_id,
-                term,
-                family_income_bracket,
-                transport_user,
-                sibling_count,
-                status,
-                fee_default
-            ])
+    for i in range(num_students):
+        stu_id = f"STU_{i + 1:03d}"
 
-    return pd.DataFrame(data, columns=[
-        'student_id',
-        'term',
-        'family_income_bracket',
-        'transport_user',
-        'sibling_count',
-        'fee_status',
-        'fee_default'
-    ])
+        # ---- Student-level demographic features (fixed across terms) --------
+        family_income_bracket = np.random.choice(
+            ["Low", "Medium", "High"], p=[0.30, 0.50, 0.20]
+        )
+        transport_user = int(np.random.choice([0, 1], p=[0.55, 0.45]))
+        sibling_count  = int(np.random.randint(0, 5))   # 0 to 4
+
+        probs = bracket_probs[family_income_bracket]
+
+        # ---- 3 terms per student --------------------------------------------
+        for term in range(1, 4):
+            fee_status  = np.random.choice(statuses, p=probs)
+            fee_default = 1 if fee_status == "Default" else 0
+
+            records.append((
+                stu_id, term,
+                family_income_bracket, transport_user, sibling_count,
+                fee_status, fee_default
+            ))
+
+    df = pd.DataFrame(
+        records,
+        columns=[
+            "student_id", "term",
+            "family_income_bracket", "transport_user", "sibling_count",
+            "fee_status", "fee_default"
+        ]
+    )
+    return df

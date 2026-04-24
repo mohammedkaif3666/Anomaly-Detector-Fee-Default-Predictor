@@ -1,0 +1,51 @@
+{
+  "model_type": "IsolationForest",
+  "trained_at": "2026-04-24T13:47:21.511799",
+  "training_samples": 500,
+  "features": [
+    "attendance_rate",
+    "longest_absence_streak",
+    "absence_in_last_30_days",
+    "day_of_week_variance"
+  ],
+  "model_config": {
+    "n_estimators": 100,
+    "contamination": 0.14,
+    "random_state": 42,
+    "n_jobs": -1
+  },
+  "n_estimators": 100,
+  "contamination": 0.14,
+  "metrics": {
+    "accuracy": 0.964,
+    "anomaly_precision": 0.8714,
+    "anomaly_recall": 0.8714,
+    "anomaly_f1": 0.8714
+  },
+  "feature_stats": {
+    "attendance_rate": {
+      "mean": 0.8404,
+      "std": 0.1318,
+      "min": 0.28,
+      "max": 0.99
+    },
+    "longest_absence_streak": {
+      "mean": 3.46,
+      "std": 3.8955,
+      "min": 1.0,
+      "max": 34.0
+    },
+    "absence_in_last_30_days": {
+      "mean": 6.054,
+      "std": 6.7761,
+      "min": 0.0,
+      "max": 27.0
+    },
+    "day_of_week_variance": {
+      "mean": 0.0021,
+      "std": 0.0017,
+      "min": 0.0001,
+      "max": 0.0086
+    }
+  }
+}

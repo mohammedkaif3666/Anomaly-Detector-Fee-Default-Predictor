@@ -21,16 +21,27 @@ The team reaches out early. One default is prevented.
 
 ## Project Structure
 
-```
+```text
 school_predictor/
-├── data/
-│   ├── attendance_features.csv   # one row per student, 4 features + label
-│   └── fee_features.csv          # 3 rows per student (terms), 5 col + label
-├── src/
-│   ├── generator.py              # synthetic data generation (NumPy)
-│   └── features.py               # feature engineering
-├── main.py                       # full pipeline runner
-├── requirements.txt
+├── data/                         # Generated synthetic datasets go here
+│   ├── attendance_features.csv   # 1 row/student, 4 features + label
+│   └── fee_features.csv          # 3 rows/student (terms), 5 col + label
+├── src/                          # Data Generation Source Code
+│   ├── generator.py              # Synthetic data generation (NumPy)
+│   └── features.py               # Feature engineering
+├── Om/                           # Attendance Anomaly Detection Model (ML)
+│   ├── notebooks/
+│   │   ├── attendance_model_prod.py    # Production pipeline for isolation forest
+│   │   └── train_attendance_model.py   # Simple training script
+│   ├── models/                   # Saved Isolation Forest model (.pkl)
+│   └── reports/                  # Evaluation reports and CSV outputs
+├── Are_Samhith/                  # Fee Default Prediction Model (ML)
+│   └── models/
+│       ├── train_v2_final.py     # GradientBoostingClassifier for fee default
+│       ├── model_v2.pkl          # Saved GradientBoosting model
+│       └── threshold_v2.pkl      # Tuned decision threshold (0.40)
+├── main.py                       # Data generation pipeline runner
+├── requirements.txt              # Project dependencies
 └── README.md
 ```
 
@@ -38,77 +49,61 @@ school_predictor/
 
 ## My Contribution — Dataset Generation
 
-### Attendance Data  (`attendance_features.csv`)
+### Attendance Data (`attendance_features.csv`)
 
 | Spec | Value |
 |---|---|
 | Students | 500 |
 | School days | 200 (Mon–Fri cycling) |
 | Normal students (86%) | `attendance_rate ~ Uniform(0.80, 0.97)` → `is_anomalous = 0` |
-| Anomalous students (14%) | Start normal (85-97%), then **sudden drop** to `Uniform(0.20, 0.40)` at a random breakpoint (day 30–150) → `is_anomalous = 1` |
+| Anomalous students (14%) | Start normal, then sudden drop. → `is_anomalous = 1` |
 
-**Engineered features per student:**
+**Features:** `attendance_rate`, `longest_absence_streak`, `absence_in_last_30_days`, `day_of_week_variance`.
 
-| Feature | Description |
-|---|---|
-| `attendance_rate` | Fraction of 200 days the student was present |
-| `longest_absence_streak` | Maximum consecutive days absent |
-| `absence_in_last_30_days` | Absences in the final 30 school days |
-| `day_of_week_variance` | Variance of per-weekday attendance rates (Mon–Fri) |
-| `is_anomalous` | **Label** — 1 = anomalous, 0 = normal |
-
-### Fee Data  (`fee_features.csv`)
+### Fee Data (`fee_features.csv`)
 
 | Spec | Value |
 |---|---|
 | Students | 500 |
 | Terms | 3 per student (1500 rows total) |
-| On-time | ~80% |
-| Late | ~15% |
 | Default | ~5% |
 
-**Features:**
-
-| Feature | Description |
-|---|---|
-| `family_income_bracket` | Low / Medium / High (30% / 50% / 20%) |
-| `transport_user` | 1 = uses school transport, 0 = does not |
-| `sibling_count` | Number of siblings (0–4) |
-| `fee_status` | On-time / Late / Default |
-| `fee_default` | **Label** — 1 = Default, 0 = On-time or Late |
-
-> Income is correlated with default probability — Low-income families have higher default risk — providing a realistic ML signal.
+**Features:** `family_income_bracket`, `transport_user`, `sibling_count`, `fee_status` (Term N features predict Term N+1 default).
 
 ---
 
-## How to Run
+## ML Models
+
+### 1. Attendance Anomaly Detection (by Om)
+Uses an **Isolation Forest** to identify students with highly irregular attendance patterns (e.g., a sudden drop from 95% to 30%).
+- **How to train:** `cd Om && python notebooks/attendance_model_prod.py --mode train --input ../data/attendance_features.csv`
+- **Output:** Saves `attendance_model.pkl` in `Om/models/`.
+
+### 2. Fee Default Predictor (by Are Samhith)
+Uses a **GradientBoostingClassifier** with `sample_weight="balanced"` and a tuned threshold (0.40) to hit a 70%+ recall rate in predicting next-term fee defaults.
+- **How to train:** `cd Are_Samhith/models && python train_v2_final.py`
+- **Output:** Saves `model_v2.pkl` and `threshold_v2.pkl`.
+
+---
+
+## How to Run the Full Pipeline
 
 ```bash
-# Install dependencies
+# 1. Install dependencies
 pip install -r requirements.txt
 
-# Generate datasets
+# 2. Generate datasets (creates files in data/)
 python main.py
-```
 
-Datasets will be saved to `data/`.
-
----
-
-## Dependencies
-
-```
-numpy>=1.24
-pandas>=2.0
-scikit-learn>=1.3
+# 3. Train models
+cd Om && python notebooks/train_attendance_model.py
+cd ../Are_Samhith/models && python train_v2_final.py
 ```
 
 ---
 
 ## Design Decisions
-
 - **Synthetic data only** — generated with NumPy. No real dataset downloaded.
-- **Sudden-drop anomaly** — anomalous students look normal at first (days 0–breakpoint), then attendance collapses. This is what makes the problem hard and realistic.
-- **Random breakpoints** — each anomalous student's drop happens at a different day (30–150), preventing the model from learning a trivial time-position shortcut.
-- **Correlated features** — income bracket influences default probability, making the fee model actually learn meaningful patterns.
-- **Reproducibility** — all generators use `seed=42`.
+- **Sudden-drop anomaly** — anomalous students look normal at first, then attendance collapses.
+- **Correlated features** — income bracket influences default probability, making the fee model learn meaningful patterns.
+- **No data leakage** — Fee default model strictly uses Term N to predict Term N+1.

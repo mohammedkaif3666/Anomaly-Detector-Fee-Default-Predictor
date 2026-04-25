@@ -1,7 +1,7 @@
 ============================================================
 ATTENDANCE ANOMALY DETECTION — EVALUATION REPORT
-Generated : 2026-04-24 13:47:39
-Dataset   : attendance_features.csv  (500 students)
+Generated : 2026-04-25 21:40:37
+Dataset   : ../data/attendance_features.csv  (500 students)
 ============================================================
 
 CONFUSION MATRIX

@@ -5,7 +5,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 import pickle
 
 # ── 1. Load Data ──────────────────────────────────────────────────────────────
-df = pd.read_csv("attendance_features.csv")
+df = pd.read_csv("../data/attendance_features.csv")
 
 features = [
     "attendance_rate",
@@ -51,7 +51,7 @@ print(f"\nFlagged Students ({len(flagged)} total):")
 print(flagged.to_string(index=False))
 
 # ── 5. Save Model ─────────────────────────────────────────────────────────────
-with open("attendance_model.pkl", "wb") as f:
+with open("models/attendance_model.pkl", "wb") as f:
     pickle.dump(model, f)
 
 print("\n✅ Model saved as attendance_model.pkl")

@@ -27,7 +27,7 @@ print("=" * 60)
 # ─────────────────────────────────────────────
 # STEP 1: Load & Encode
 # ─────────────────────────────────────────────
-df = pd.read_csv("/mnt/user-data/uploads/fee_features.csv")
+df = pd.read_csv("data/fee_features.csv")
 
 income_map = {"High": 0, "Medium": 1, "Low": 2}
 status_map = {"On-time": 0, "Late": 1, "Default": 2}

@@ -1,6 +1,6 @@
 {
   "model_type": "IsolationForest",
-  "trained_at": "2026-04-24T13:47:21.511799",
+  "trained_at": "2026-04-25T21:40:30.247316",
   "training_samples": 500,
   "features": [
     "attendance_rate",

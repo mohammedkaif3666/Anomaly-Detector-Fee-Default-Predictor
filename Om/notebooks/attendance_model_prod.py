@@ -80,7 +80,7 @@ VALIDATION_RULES = {
 
 def ensure_dirs() -> None:
     """Create required output directories if they don't exist."""
-    for path in ["models", "reports", "data"]:
+    for path in ["models", "reports"]:
         Path(path).mkdir(parents=True, exist_ok=True)
 
 

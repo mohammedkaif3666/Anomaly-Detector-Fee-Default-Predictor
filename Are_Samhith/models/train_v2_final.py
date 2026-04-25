@@ -22,11 +22,7 @@ print("KALNET AI-4 — Fee Default Predictor v2 (Final)")
 print("Are Samhith | ML Engineer 2")
 print("=" * 60)
 
-# ── Config ────────────────────────────────────
-DECISION_THRESHOLD = 0.40   # tuned: lower than 0.5 to catch more defaulters
-MODEL_PATH         = "/home/claude/models/fee_predictor/model_v2.pkl"
-FEATURE_COLS_PATH  = "/home/claude/models/fee_predictor/feature_cols_v2.pkl"
-THRESHOLD_PATH     = "/home/claude/models/fee_predictor/threshold_v2.pkl"
+
 
 # ─────────────────────────────────────────────
 # STEP 1: Load & Encode
